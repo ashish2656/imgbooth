@@ -1,0 +1,15 @@
+{
+  "template_name": "classic_frame",
+  "template_path": "C:\\Users\\Krishil Agrawal\\Desktop\\ML Projects\\image_overlay_system\\templates\\sample_templates\\frames\\classic_frame.png",
+  "zones": [
+    {
+      "id": 0,
+      "x": 80,
+      "y": 80,
+      "width": 640,
+      "height": 440,
+      "type": "photo_overlay",
+      "description": "Photo overlay zone 1"
+    }
+  ]
+}

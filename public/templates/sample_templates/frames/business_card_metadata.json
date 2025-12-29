@@ -1,0 +1,15 @@
+{
+  "template_name": "business_card",
+  "template_path": "C:\\Users\\Krishil Agrawal\\Desktop\\ML Projects\\image_overlay_system\\templates\\sample_templates\\frames\\business_card.png",
+  "zones": [
+    {
+      "id": 0,
+      "x": 40,
+      "y": 115,
+      "width": 120,
+      "height": 120,
+      "type": "photo_overlay",
+      "description": "Photo overlay zone 1"
+    }
+  ]
+}
