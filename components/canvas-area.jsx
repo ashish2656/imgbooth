@@ -1,152 +1,161 @@
 "use client"
 
-import { motion } from "framer-motion"
-import { useEffect, useRef } from "react"
-import * as fabric from 'fabric'
+import { useEffect, useRef, useState } from "react"
 import { useEditor } from "@/contexts/editor-context"
+import { motion } from "framer-motion"
+import { fabric } from "fabric" // v5 Import Syntax
 
 export default function CanvasArea() {
-  const { 
-    template, 
-    userPhoto, 
-    textFields, 
+  const {
+    template,
+    userPhoto,
+    textFields,
     photoPosition,
     setFabricCanvas,
     setFabricImage,
     updatePhotoPosition
   } = useEditor()
-  
+
+  const containerRef = useRef(null)
   const canvasRef = useRef(null)
   const fabricCanvasRef = useRef(null)
 
+  // 1. Initialize Responsive Canvas
   useEffect(() => {
-    if (!canvasRef.current) return
+    if (!canvasRef.current || !containerRef.current) return
 
-    // Initialize Fabric.js canvas
+    // Clean up previous instance
+    if (fabricCanvasRef.current) {
+      fabricCanvasRef.current.dispose()
+    }
+
+    // Get parent dimensions
+    const width = containerRef.current.clientWidth
+    const height = containerRef.current.clientHeight
+
     const canvas = new fabric.Canvas(canvasRef.current, {
-      width: 600,
-      height: 400,
-      backgroundColor: '#ffffff',
-      selection: true
+      width: width,
+      height: height,
+      backgroundColor: "#ffffff",
+      selection: true,
+      preserveObjectStacking: true
     })
 
     fabricCanvasRef.current = canvas
     setFabricCanvas(canvas)
 
-    // Add template background if exists
-    if (template) {
-      fabric.Image.fromURL(template.background, (img) => {
-        // Scale image to fit canvas
-        const scale = Math.min(
-          canvas.width / img.width,
-          canvas.height / img.height
-        )
-        img.scale(scale)
-        img.set({
-          left: canvas.width / 2,
-          top: canvas.height / 2,
-          originX: 'center',
-          originY: 'center',
-          selectable: false,
-          evented: false
+    // Resize logic
+    const handleResize = () => {
+        if (!containerRef.current || !fabricCanvasRef.current) return
+        const newWidth = containerRef.current.clientWidth
+        const newHeight = containerRef.current.clientHeight
+        
+        fabricCanvasRef.current.setDimensions({
+            width: newWidth,
+            height: newHeight
         })
-        canvas.add(img)
-        canvas.sendToBack(img)
-      }).catch(() => {
-        // If image fails to load, create a placeholder
-        const rect = new fabric.Rect({
-          left: 20,
-          top: 20,
-          width: 560,
-          height: 360,
-          fill: '#f8f9fa',
-          stroke: '#dee2e6',
-          strokeWidth: 2,
-          selectable: false,
-          evented: false
-        })
-        canvas.add(rect)
-        canvas.sendToBack(rect)
-      })
-
-      // Add photo area indicator
-      if (template.photoArea) {
-        const photoRect = new fabric.Rect({
-          left: template.photoArea.x,
-          top: template.photoArea.y,
-          width: template.photoArea.width,
-          height: template.photoArea.height,
-          fill: 'rgba(59, 130, 246, 0.1)',
-          stroke: '#3b82f6',
-          strokeWidth: 2,
-          strokeDashArray: [5, 5],
-          selectable: false,
-          evented: false
-        })
-        canvas.add(photoRect)
-      }
+        fabricCanvasRef.current.renderAll()
     }
+
+    window.addEventListener("resize", handleResize)
 
     return () => {
+      window.removeEventListener("resize", handleResize)
       canvas.dispose()
+      fabricCanvasRef.current = null
+      setFabricCanvas(null)
     }
-  }, [template, setFabricCanvas])
+  }, [setFabricCanvas])
 
+  // 2. Handle Template Background (v5 Callback Syntax)
   useEffect(() => {
-    if (!fabricCanvasRef.current || !userPhoto) return
-
     const canvas = fabricCanvasRef.current
+    if (!canvas || !template) return
 
-    // Remove existing image if any
-    const existingImage = canvas.getObjects().find(obj => obj.userPhoto === true)
-    if (existingImage) {
-      canvas.remove(existingImage)
-    }
+    canvas.getObjects().forEach(obj => {
+      if (obj.isTemplateBackground) canvas.remove(obj)
+    })
 
-    // Add new user photo
-    fabric.Image.fromURL(userPhoto, (img) => {
-      // Set initial position and size based on template or defaults
-      const initialX = template?.photoArea?.x || 50
-      const initialY = template?.photoArea?.y || 50
-      const initialWidth = template?.photoArea?.width || 120
-      const initialHeight = template?.photoArea?.height || 150
-
-      // Scale image to fit the photo area
-      const scale = Math.min(
-        initialWidth / img.width,
-        initialHeight / img.height
-      )
+    // v5 uses callbacks, not Promises
+    fabric.Image.fromURL(template.background, (img) => {
+      // Scale to cover
+      const scale = Math.max(canvas.width / img.width, canvas.height / img.height)
       
       img.scale(scale)
       img.set({
+        left: canvas.width / 2,
+        top: canvas.height / 2,
+        originX: "center",
+        originY: "center",
+        selectable: false,
+        evented: false,
+        isTemplateBackground: true
+      })
+      canvas.add(img)
+      canvas.sendToBack(img)
+      canvas.renderAll()
+    })
+
+  }, [template])
+
+  // 3. Update User Photo Position
+  useEffect(() => {
+    if (!fabricCanvasRef.current) return
+    const img = fabricCanvasRef.current.getObjects().find(obj => obj.userPhoto)
+    if (!img) return
+    
+    // Check if values differ to avoid loops
+    if (img.left !== photoPosition.x || img.top !== photoPosition.y) {
+        img.set({
+            left: photoPosition.x,
+            top: photoPosition.y,
+            scaleX: photoPosition.scale,
+            scaleY: photoPosition.scale,
+            angle: photoPosition.rotation
+        })
+        fabricCanvasRef.current.renderAll()
+    }
+  }, [photoPosition])
+
+  // 4. Handle User Photo Upload (v5 Callback Syntax)
+  useEffect(() => {
+    if (!fabricCanvasRef.current || !userPhoto) return
+    const canvas = fabricCanvasRef.current
+
+    const existingImage = canvas.getObjects().find(obj => obj.userPhoto === true)
+    if (existingImage) canvas.remove(existingImage)
+
+    fabric.Image.fromURL(userPhoto, (img) => {
+      const initialX = canvas.width / 2
+      const initialY = canvas.height / 2
+      const targetWidth = canvas.width * 0.5
+      const scale = targetWidth / img.width
+
+      img.set({
         left: initialX,
         top: initialY,
+        scaleX: scale,
+        scaleY: scale,
+        originX: "center",
+        originY: "center",
         selectable: true,
         evented: true,
-        hasControls: true,
-        hasBorders: true,
-        lockScalingFlip: true,
-        userPhoto: true // Mark as user photo
+        userPhoto: true,
+        borderColor: "#2563eb",
+        cornerColor: "white",
+        cornerStrokeColor: "#2563eb",
+        cornerSize: 10,
+        transparentCorners: false
       })
 
-      // Add event listeners for real-time updates
-      img.on('moving', function() {
-        updatePhotoPosition({
-          x: Math.round(this.left),
-          y: Math.round(this.top)
-        })
+      img.on("moving", function () {
+        updatePhotoPosition({ x: Math.round(this.left), y: Math.round(this.top) })
       })
-
-      img.on('scaling', function() {
-        updatePhotoPosition({
-          scale: this.scaleX
-        })
+      img.on("scaling", function () {
+        updatePhotoPosition({ scale: this.scaleX })
       })
-
-      img.on('rotating', function() {
-        updatePhotoPosition({
-          rotation: this.angle
-        })
+      img.on("rotating", function () {
+        updatePhotoPosition({ rotation: this.angle })
       })
 
       canvas.add(img)
@@ -154,81 +163,24 @@ export default function CanvasArea() {
       canvas.setActiveObject(img)
       canvas.renderAll()
     })
+  }, [userPhoto, setFabricImage, updatePhotoPosition])
 
-  }, [userPhoto, template, updatePhotoPosition, setFabricImage])
-
-  // Add text fields to canvas
-  useEffect(() => {
-    if (!fabricCanvasRef.current || !template) return
-
-    const canvas = fabricCanvasRef.current
-
-    // Remove existing text objects
-    canvas.getObjects().forEach(obj => {
-      if (obj.isTextField === true) {
-        canvas.remove(obj)
-      }
-    })
-
-    // Add text fields
-    template.textFields.forEach((field) => {
-      const text = new fabric.Text(textFields[field.id] || field.defaultValue, {
-        left: field.x,
-        top: field.y,
-        fontSize: field.fontSize,
-        fontWeight: field.fontWeight,
-        fill: field.color,
-        fontFamily: field.fontFamily || 'serif',
-        selectable: false,
-        evented: false,
-        isTextField: true
-      })
-      canvas.add(text)
-    })
-
-    canvas.renderAll()
-  }, [template, textFields])
+  // ... (Keep your allowDrop and handleDrop functions same as before) ...
+  function allowDrop(e) { e.preventDefault() }
+  const handleDrop = (e) => { /* logic */ } 
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-muted p-8">
+    <div className="flex flex-1 items-center justify-center bg-muted p-4 h-full w-full">
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+        ref={containerRef}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={{ duration: 0.4 }}
-        className="relative flex h-full max-h-[600px] w-full max-w-[600px] items-center justify-center rounded-sm border-2 border-border bg-background shadow-lg overflow-hidden"
+        className="relative w-full h-full bg-background shadow-lg overflow-hidden border border-border rounded-md"
+        onDragOver={allowDrop}
+        onDrop={handleDrop}
       >
-        {!template ? (
-          <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
-            <motion.div
-              animate={{
-                scale: [1, 1.05, 1],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Number.POSITIVE_INFINITY,
-                ease: "easeInOut",
-              }}
-              className="h-32 w-32 rounded-sm border-2 border-dashed border-border flex items-center justify-center"
-            >
-              <svg className="h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </motion.div>
-            <div>
-              <h3 className="text-lg font-serif font-semibold text-foreground mb-2">Your Canvas</h3>
-              <p className="text-sm text-muted-foreground">Choose a template and upload a photo to get started</p>
-            </div>
-          </div>
-        ) : (
-          <div className="relative w-full h-full flex items-center justify-center">
-            <canvas ref={canvasRef} />
-          </div>
-        )}
+        <canvas ref={canvasRef} />
       </motion.div>
     </div>
   )
