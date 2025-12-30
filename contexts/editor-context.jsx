@@ -16,7 +16,7 @@ export function EditorProvider({ children }) {
   const [template, setTemplate] = useState(null)
   const [userPhoto, setUserPhoto] = useState(null)
   const [textFields, setTextFields] = useState({})
-  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0, scale: 1, rotation: 0 })
+  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0 })
   const [activeTool, setActiveTool] = useState("upload")
   const fabricCanvasRef = useRef(null)
   const fabricImageRef = useRef(null)
@@ -75,6 +75,8 @@ export function EditorProvider({ children }) {
     activeTool,
     setActiveTool,
     resetEditor,
+    fabricCanvas: fabricCanvasRef.current,
+    fabricImage: fabricImageRef.current,
     fabricCanvasRef,
     fabricImageRef,
     setFabricCanvas,

@@ -1,8 +1,7 @@
 "use client"
-import { Plus } from "lucide-react"
-import { useState } from "react"
+
 import { motion } from "framer-motion"
-import { fabric } from "fabric" // Fabric v5 import
+import React from "react"
 import {
   Upload,
   Layout,
@@ -11,84 +10,130 @@ import {
   Sparkles,
   Sticker,
   Wand2,
-  Move,
+  Maximize,
   RotateCw,
-  Maximize
+  Plus,
+  Loader2,
+  Trash2
 } from "lucide-react"
 import { useEditor } from "@/contexts/editor-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-// If you don't have a Slider component, standard <input type="range"> is used below
-// import { Slider } from "@/components/ui/slider" 
+import useAutoFit from "@/components/autofit" // Hook Import
+
+// Ensure fabric is available for text creation
+import { fabric } from "fabric"
+import { toast } from "sonner" 
 
 export default function Sidebar() {
   const { 
     activeTool, 
     setActiveTool, 
-    template, 
+    template,
     setTemplate, 
     userPhoto, 
     setUserPhoto, 
     photoPosition, 
     updatePhotoPosition,
-    fabricCanvasRef,
+    fabricCanvas, // Assuming Context provides the object directly
+    fabricCanvasRef // Or the ref
   } = useEditor()
 
+  // 1. Initialize the AI Hook
+  const { detectAndFit, isLoading, error } = useAutoFit()
+  const [isEnhancing, setIsEnhancing] = React.useState(false)
+  const [isAnalyzingText, setIsAnalyzingText] = React.useState(false)
+  const [detectedTextColor, setDetectedTextColor] = React.useState(null)
+
   const tools = [
-    { icon: Upload, label: "Upload Photo", tool: "upload" },
-    { icon: Layout, label: "Choose Template", tool: "template" },
+    { icon: Upload, label: "Upload", tool: "upload" },
+    { icon: Layout, label: "Template", tool: "template" },
     { icon: Type, label: "Text", tool: "text", draggable: true },
-    { icon: Crop, label: "Position Photo", tool: "crop" }, // This is the one we are fixing
-    { icon: Sparkles, label: "Filters", tool: "filters" },
-    { icon: Sticker, label: "Sticker", tool: "sticker", draggable: true },
+    { icon: Crop, label: "Position", tool: "crop" },
     { icon: Wand2, label: "Auto Fit", tool: "autofit", badge: "AI" },
   ]
 
-  // --- CORE LOGIC: Update Fabric Object from Sidebar ---
-  const handlePhotoAdjustment = (key, value) => {
-    // 1. Update React State (so sliders don't jump)
-    const newValue = parseFloat(value)
-    updatePhotoPosition({ [key]: newValue })
+  // --- Helper: Get the active canvas (Ref or Object) ---
+  const getCanvas = () => fabricCanvasRef?.current || fabricCanvas
 
-    // 2. Update Canvas Immediately
-    if (fabricCanvasRef.current) {
-      const canvas = fabricCanvasRef.current
-      // Find the object specifically tagged as 'userPhoto'
+  // --- Update Fabric Object ---
+  const handlePhotoAdjustment = (key, value) => {
+    const newValue = parseFloat(value)
+    
+    const canvas = getCanvas()
+    if (canvas) {
       const img = canvas.getObjects().find((obj) => obj.userPhoto === true)
 
       if (img) {
         if (key === "scale") {
-          img.scale(newValue)
+          img.set({ scaleX: newValue, scaleY: newValue })
+          updatePhotoPosition({ scale: newValue, scaleX: newValue, scaleY: newValue })
+        } else if (key === "scaleX") {
+          img.set({ scaleX: newValue })
+          updatePhotoPosition({ scaleX: newValue })
+        } else if (key === "scaleY") {
+          img.set({ scaleY: newValue })
+          updatePhotoPosition({ scaleY: newValue })
         } else if (key === "rotation") {
           img.rotate(newValue)
+          updatePhotoPosition({ rotation: newValue })
         } else if (key === "x") {
           img.set("left", newValue)
+          updatePhotoPosition({ x: newValue })
         } else if (key === "y") {
           img.set("top", newValue)
+          updatePhotoPosition({ y: newValue })
         }
 
-        img.setCoords() // Recalculate hit box
+        img.setCoords()
         canvas.renderAll()
       }
     }
   }
 
-  // --- Helper: File Uploads ---
   function handlePhotoUpload(e) {
     const file = e.target.files[0]
     if (!file) return
     setUserPhoto(URL.createObjectURL(file))
   }
-
-  // --- Helper: Auto Fit Logic ---
-  function autoFit() {
-    if (!fabricCanvasRef.current) return
-    const canvas = fabricCanvasRef.current
-    const img = canvas.getObjects().find(obj => obj.userPhoto === true)
+  
+  // Analyze template text color
+  const analyzeTemplateText = async () => {
+    if (!template) return
     
+    setIsAnalyzingText(true)
+    try {
+      const templateBlob = await fetch(template.background).then(r => r.blob())
+      const formData = new FormData()
+      formData.append("template", templateBlob, "template.png")
+      
+      const response = await fetch("/api/analyze-text", {
+        method: "POST",
+        body: formData,
+      })
+      
+      if (!response.ok) throw new Error("Text analysis failed")
+      
+      const data = await response.json()
+      setDetectedTextColor(data.color)
+      toast.success(`✨ Detected text color: ${data.color}`)
+      return data.color
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to analyze text color")
+      return null
+    } finally {
+      setIsAnalyzingText(false)
+    }
+  }
+
+  function manualReset() {
+    const canvas = getCanvas()
+    if (!canvas) return
+    
+    const img = canvas.getObjects().find(obj => obj.userPhoto === true)
     if (img) {
-        // Reset to center
         const center = canvas.getCenter()
         handlePhotoAdjustment("x", center.left)
         handlePhotoAdjustment("y", center.top)
@@ -96,10 +141,10 @@ export default function Sidebar() {
         handlePhotoAdjustment("rotation", 0)
     }
   }
-// --- Function to Add Text to Canvas ---
-  const addText = (textType) => {
-    if (!fabricCanvasRef.current) return
-    const canvas = fabricCanvasRef.current
+
+  const addText = (textType, color = null) => {
+    const canvas = getCanvas()
+    if (!canvas) return
     
     let fontSize = 20
     let fontWeight = 'normal'
@@ -110,8 +155,9 @@ export default function Sidebar() {
     } else if (textType === 'subheading') {
         fontSize = 24; fontWeight = '600'; textContent = "Subheading"
     }
-
-    // Create the text object
+    
+    const fillColor = color || detectedTextColor || "#000000" // Use passed color, detected color, or default
+    
     const text = new fabric.IText(textContent, {
         left: canvas.width / 2,
         top: canvas.height / 2,
@@ -119,7 +165,7 @@ export default function Sidebar() {
         originY: 'center',
         fontSize: fontSize,
         fontWeight: fontWeight,
-        fill: "#000000",
+        fill: fillColor,
         fontFamily: "Arial",
     })
 
@@ -127,6 +173,7 @@ export default function Sidebar() {
     canvas.setActiveObject(text)
     canvas.renderAll()
   }
+
   return (
     <div className="flex h-screen">
       <motion.aside
@@ -136,18 +183,16 @@ export default function Sidebar() {
       >
         <h2 className="text-sm font-semibold mb-4">Tools</h2>
 
-        {/* Navigation Buttons */}
+        {/* Navigation */}
         <div className="flex flex-col gap-2 mb-6">
-          {tools.map((tool, index) => {
+          {tools.map((tool) => {
             const isActive = activeTool === tool.tool
             return (
               <motion.button
                 key={tool.label}
                 draggable={tool.draggable}
-                // Drag start logic for text/stickers
                 onDragStart={(e) => {
                   if (tool.tool === "text") e.dataTransfer.setData("application/editor-item", JSON.stringify({ type: "text" }))
-                  if (tool.tool === "sticker") e.dataTransfer.setData("application/editor-item", JSON.stringify({ type: "sticker" }))
                 }}
                 onClick={() => setActiveTool(tool.tool)}
                 className={`flex items-center gap-3 rounded-sm px-4 py-3 text-sm font-medium transition-colors
@@ -161,132 +206,250 @@ export default function Sidebar() {
           })}
         </div>
 
-        {/* --- DYNAMIC TOOL PANELS --- */}
-
-        {/* 1. UPLOAD PANEL */}
+        {/* PANELS */}
         {activeTool === "upload" && (
           <div className="space-y-4">
             <Label>Upload Photo</Label>
             <Input type="file" accept="image/*" onChange={handlePhotoUpload} />
-            {userPhoto && <img src={userPhoto} className="w-full h-32 object-cover border rounded" alt="Preview" />}
+            {userPhoto && (
+              <>
+                <img src={userPhoto} className="w-full h-32 object-cover border rounded" alt="Preview" />
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={() => {
+                    const canvas = getCanvas()
+                    if (canvas) {
+                      const img = canvas.getObjects().find(obj => obj.userPhoto)
+                      if (img) {
+                        canvas.remove(img)
+                        canvas.renderAll()
+                      }
+                    }
+                    setUserPhoto(null)
+                    updatePhotoPosition({ x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0 })
+                    toast.success("Photo deleted")
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Delete Photo
+                </Button>
+              </>
+            )}
           </div>
         )}
 
-        {/* 2. TEMPLATE PANEL */}
         {activeTool === "template" && (
              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Select a template from the dashboard or upload one here.</p>
+                <p className="text-sm text-muted-foreground">Select a template background.</p>
                 <Input type="file" accept="image/*" onChange={(e) => {
                     const file = e.target.files[0]
                     if (file) {
                         const url = URL.createObjectURL(file)
-                        setTemplate({ background: url, id: Date.now() })
-                        setActiveTool("text")
+                        setTemplate({ 
+                          background: url, 
+                          id: Date.now(),
+                          textFields: [],
+                          photoArea: { x: 50, y: 50, width: 200, height: 200 } 
+                        })
                     }
                 }} />
              </div>
         )}
 
-        {/* 3. POSITION / CROP PANEL (FIXED) */}
         {activeTool === "crop" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
-            
-            {/* Zoom Control */}
             <div className="space-y-3">
               <div className="flex justify-between">
                 <Label className="flex items-center gap-2"><Maximize className="w-3 h-3"/> Zoom</Label>
                 <span className="text-xs text-muted-foreground">{Number(photoPosition.scale).toFixed(2)}x</span>
               </div>
               <input 
-                type="range" 
-                min="0.1" 
-                max="3" 
-                step="0.05"
+                type="range" min="0.1" max="3" step="0.05"
                 value={photoPosition.scale}
                 onChange={(e) => handlePhotoAdjustment("scale", e.target.value)}
                 className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
-
-            {/* Rotation Control */}
+            
             <div className="space-y-3">
               <div className="flex justify-between">
-                <Label className="flex items-center gap-2"><RotateCw className="w-3 h-3"/> Rotation</Label>
-                <span className="text-xs text-muted-foreground">{Math.round(photoPosition.rotation)}°</span>
+                <Label className="text-xs">Width Stretch</Label>
+                <span className="text-xs text-muted-foreground">{Number(photoPosition.scaleX ?? photoPosition.scale).toFixed(2)}x</span>
               </div>
               <input 
-                type="range" 
-                min="-180" 
-                max="180" 
-                step="1"
-                value={photoPosition.rotation}
-                onChange={(e) => handlePhotoAdjustment("rotation", e.target.value)}
+                type="range" min="0.1" max="3" step="0.05"
+                value={photoPosition.scaleX ?? photoPosition.scale}
+                onChange={(e) => handlePhotoAdjustment("scaleX", e.target.value)}
                 className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
-
-            {/* Position X/Y Controls */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Position X</Label>
-                <Input 
-                  type="number" 
-                  value={Math.round(photoPosition.x)} 
-                  onChange={(e) => handlePhotoAdjustment("x", e.target.value)}
-                />
+            
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <Label className="text-xs">Height Stretch</Label>
+                <span className="text-xs text-muted-foreground">{Number(photoPosition.scaleY ?? photoPosition.scale).toFixed(2)}x</span>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Position Y</Label>
-                <Input 
-                  type="number" 
-                  value={Math.round(photoPosition.y)} 
-                  onChange={(e) => handlePhotoAdjustment("y", e.target.value)}
-                />
-              </div>
+              <input 
+                type="range" min="0.1" max="3" step="0.05"
+                value={photoPosition.scaleY ?? photoPosition.scale}
+                onChange={(e) => handlePhotoAdjustment("scaleY", e.target.value)}
+                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+              />
             </div>
-
-             <Button variant="outline" size="sm" onClick={autoFit} className="w-full mt-2">
+            
+            {/* ... other crop controls ... */}
+             <Button variant="outline" size="sm" onClick={manualReset} className="w-full mt-2">
                 Reset Position
              </Button>
           </div>
         )}
 
-        {/* 4. AUTO FIT PANEL */}
+        {/* AUTO FIT PANEL */}
         {activeTool === "autofit" && (
-            <div className="text-center space-y-4">
-                <p className="text-sm text-muted-foreground">Automatically center and scale your photo.</p>
-                <Button onClick={autoFit} className="w-full">
-                    <Wand2 className="h-4 w-4 mr-2" />
-                    Auto Fit
-                </Button>
-            </div>
-        )}
-        {/* TEXT TOOL PANEL */}
-        {activeTool === "text" && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-left-4">
-                <Label>Add Text Layer</Label>
-                <div className="grid grid-cols-1 gap-2">
-                    <Button variant="outline" onClick={() => addText('heading')} className="justify-start h-12 text-lg font-bold">
-                        <Plus className="w-4 h-4 mr-2"/> Add Heading
+            <div className="text-center space-y-4 animate-in fade-in slide-in-from-left-4">
+                <div className="p-4 border border-dashed rounded-md bg-muted/50">
+                    <Wand2 className="w-8 h-8 mx-auto mb-2 text-primary" />
+                    <p className="text-sm font-medium">AI Face Positioning</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Automatically detect and center the face in the template frame.
+                    </p>
+                </div>
+                
+                {error && (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                        <p className="text-xs text-destructive">{error}</p>
+                    </div>
+                )}
+                
+                <div className="space-y-2">
+                    <Button 
+                        onClick={detectAndFit} 
+                        disabled={isLoading || !userPhoto || isEnhancing} 
+                        className="w-full" 
+                        size="lg"
+                        variant="default"
+                    >
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Detecting Position...
+                            </>
+                        ) : (
+                            <>
+                                <Wand2 className="h-4 w-4 mr-2" />
+                                Auto Fit Position
+                            </>
+                        )}
                     </Button>
-                    <Button variant="outline" onClick={() => addText('subheading')} className="justify-start h-10 font-semibold">
-                        <Plus className="w-4 h-4 mr-2"/> Add Subheading
-                    </Button>
-                    <Button variant="outline" onClick={() => addText('body')} className="justify-start">
-                        <Plus className="w-4 h-4 mr-2"/> Add Body Text
+
+                    <Button 
+                        onClick={async () => {
+                            if (!userPhoto) return
+                            setIsEnhancing(true)
+                            try {
+                                const photoBlob = await fetch(userPhoto).then(r => r.blob())
+                                const formData = new FormData()
+                                formData.append("photo", photoBlob, "photo.png")
+                                formData.append("width", "400")
+                                formData.append("height", "400")
+
+                                const response = await fetch("http://localhost:8001/enhance", {
+                                    method: "POST",
+                                    body: formData,
+                                })
+
+                                if (!response.ok) throw new Error("Enhancement failed")
+
+                                const blob = await response.blob()
+                                const enhancedUrl = URL.createObjectURL(blob)
+                                setUserPhoto(enhancedUrl)
+                                toast.success("✨ Photo enhanced with AI!")
+                            } catch (err) {
+                                console.error(err)
+                                toast.error("Failed to enhance photo")
+                            } finally {
+                                setIsEnhancing(false)
+                            }
+                        }} 
+                        disabled={isEnhancing || !userPhoto || isLoading} 
+                        className="w-full" 
+                        size="lg"
+                        variant="outline"
+                    >
+                        {isEnhancing ? (
+                            <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Enhancing Face...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="h-4 w-4 mr-2" />
+                                AI Face Enhancement
+                            </>
+                        )}
                     </Button>
                 </div>
-                <div className="p-3 bg-muted rounded-md text-xs text-muted-foreground mt-4">
-                    <p className="font-semibold mb-1">How to edit:</p>
-                    <ul className="list-disc pl-4 space-y-1">
-                        <li><strong>Double-click</strong> text on canvas to type.</li>
-                        <li>Drag corners to resize.</li>
-                        <li>Drag the object to move.</li>
-                    </ul>
-                </div>
+
+                <p className="text-xs text-muted-foreground mt-2">
+                    💡 Use Enhancement first for best results
+                </p>
             </div>
         )}
 
+        {activeTool === "text" && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-left-4">
+                <Label>Add Text Layer</Label>
+                
+                {template && (
+                  <Button 
+                    variant="outline" 
+                    onClick={analyzeTemplateText}
+                    disabled={isAnalyzingText}
+                    className="w-full mb-2"
+                  >
+                    {isAnalyzingText ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Detect Template Color
+                      </>
+                    )}
+                  </Button>
+                )}
+                
+                {detectedTextColor && (
+                  <div className="p-2 bg-muted rounded flex items-center gap-2">
+                    <div 
+                      className="w-6 h-6 rounded border" 
+                      style={{ backgroundColor: detectedTextColor }}
+                    />
+                    <span className="text-xs">{detectedTextColor}</span>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => addText('heading', detectedTextColor)} 
+                      className="justify-start"
+                    >
+                        <Plus className="w-4 h-4 mr-2"/> Heading
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => addText('subheading', detectedTextColor)} 
+                      className="justify-start"
+                    >
+                        <Plus className="w-4 h-4 mr-2"/> Subheading
+                    </Button>
+                </div>
+            </div>
+        )}
       </motion.aside>
     </div>
   )
