@@ -6,6 +6,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // API proxy configuration for production
+  async rewrites() {
+    return [
+      {
+        source: '/api/ai/:path*',
+        destination: `${process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8001'}/:path*`,
+      },
+    ];
+  },
   // We explicitly configure webpack to handle the 'canvas' issue
   webpack: (config) => {
     config.externals.push({
