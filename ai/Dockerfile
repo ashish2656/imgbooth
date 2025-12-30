@@ -28,18 +28,12 @@ COPY . .
 RUN mkdir -p models
 
 # Download models on build (Railway will cache this layer)
-RUN python -c "
-import os
-import urllib.request
-
-EDSR_URL = 'https://github.com/Saafke/EDSR_Tensorflow/raw/master/models/EDSR_x2.pb'
-EDSR_PATH = 'models/EDSR_x2.pb'
-
-if not os.path.exists(EDSR_PATH):
-    print('Downloading EDSR model...')
-    urllib.request.urlretrieve(EDSR_URL, EDSR_PATH)
-    print('EDSR model downloaded!')
-"
+RUN python -c "import os; import urllib.request; \
+EDSR_URL = 'https://github.com/Saafke/EDSR_Tensorflow/raw/master/models/EDSR_x2.pb'; \
+EDSR_PATH = 'models/EDSR_x2.pb'; \
+print('Downloading EDSR model...') if not os.path.exists(EDSR_PATH) else None; \
+urllib.request.urlretrieve(EDSR_URL, EDSR_PATH) if not os.path.exists(EDSR_PATH) else None; \
+print('EDSR model downloaded!') if not os.path.exists(EDSR_PATH) else print('Model already exists')"
 
 # Expose port (Railway will set PORT env variable)
 EXPOSE 8001
