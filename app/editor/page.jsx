@@ -1,21 +1,12 @@
 "use client"
-import { EditorProvider } from "@/contexts/editor-context"
-import Sidebar from "@/components/sidebar"
-import Toolbar from "@/components/toolbar"
-import CanvasArea from "@/components/canvas-area"
-import TextEditorPanel from "@/components/text-editor-panel"
+import dynamic from 'next/dynamic'
+
+// Disable SSR for editor components that use fabric/canvas
+const EditorContent = dynamic(() => import('@/components/editor-content'), {
+  ssr: false,
+  loading: () => <div className="flex h-[calc(100vh-8rem)] items-center justify-center">Loading editor...</div>
+})
 
 export default function EditorPage() {
-  return (
-    <EditorProvider>
-      <div className="flex h-[calc(100vh-8rem)] flex-col overflow-hidden">
-        <Toolbar />
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <CanvasArea />
-          <TextEditorPanel />
-        </div>
-      </div>
-    </EditorProvider>
-  )
+  return <EditorContent />
 }

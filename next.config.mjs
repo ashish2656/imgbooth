@@ -15,12 +15,24 @@ const nextConfig = {
       },
     ];
   },
+  // Server components configuration
+  serverExternalPackages: ['canvas', 'jsdom'],
+  // Turbopack configuration for Next.js 16
+  turbopack: {},
   // We explicitly configure webpack to handle the 'canvas' issue
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        canvas: false,
+        jsdom: false,
+      };
+    }
     config.externals.push({
       "utf-8-validate": "commonjs utf-8-validate",
       "bufferutil": "commonjs bufferutil",
       "canvas": "commonjs canvas",
+      "jsdom": "commonjs jsdom",
     });
     return config;
   },
