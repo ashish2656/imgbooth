@@ -29,7 +29,7 @@ def download_file(url: str, destination: str):
 MODELS = {
     "EDSR_x2.pb": "https://github.com/Saafke/EDSR_Tensorflow/raw/master/models/EDSR_x2.pb",
     # SAM model is optional - only download if needed (358 MB)
-    # "sam_vit_b.pth": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth",
+    "sam_vit_b.pth": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth",
 }
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import { Undo, Redo, Save, Download } from "lucide-react"
 import { useEditor } from "@/contexts/editor-context"
 
 export default function Toolbar() {
-  const { template, userPhoto, resetEditor, fabricCanvasRef } = useEditor()
+  const { template, userPhoto, resetEditor, fabricCanvasRef, undo, redo, canUndo, canRedo } = useEditor()
 
   const exportCertificate = () => {
     if (!fabricCanvasRef.current) {
@@ -30,8 +30,8 @@ export default function Toolbar() {
   }
 
   const tools = [
-    { icon: Undo, label: "Undo", disabled: true },
-    { icon: Redo, label: "Redo", disabled: true },
+    { icon: Undo, label: "Undo", disabled: !canUndo, onClick: undo },
+    { icon: Redo, label: "Redo", disabled: !canRedo, onClick: redo },
     { icon: Save, label: "Save", disabled: true },
     { icon: Download, label: "Export", disabled: !template, onClick: exportCertificate },
   ]

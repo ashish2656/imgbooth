@@ -16,7 +16,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.className} font-sans antialiased`}>
+      <body className={`${geistSans.className} font-sans antialiased`} suppressHydrationWarning>
         <Header />
         {children}
         <Footer />

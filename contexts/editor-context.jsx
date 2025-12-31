@@ -21,6 +21,10 @@ export function EditorProvider({ children }) {
   const fabricCanvasRef = useRef(null)
   const fabricImageRef = useRef(null)
 
+  const [history, setHistory] = useState([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [isHistoryAction, setIsHistoryAction] = useState(false)
+
   const updateTextField = useCallback((fieldId, value) => {
     setTextFields(prev => ({ ...prev, [fieldId]: value }))
   }, [])
@@ -63,6 +67,90 @@ export function EditorProvider({ children }) {
     fabricImageRef.current = null
   }, [])
 
+
+
+  const addToHistory = useCallback((canvas) => {
+    if (!canvas) return
+    
+    // Save current state based on what's important (objects, background)
+    // We filter out 'selectable: false' if we only want to track user changes, 
+    // but usually saving the whole JSON is safer.
+    const json = canvas.toJSON(['id', 'locked', 'movementLimits', 'isTemplateBackground', 'userPhoto', 'originalWidth', 'originalHeight', 'templateScale'])
+    
+    setHistory(prev => {
+      // If we are in the middle of history, discard future states
+      const newHistory = prev.slice(0, historyIndex + 1)
+      newHistory.push(json)
+      // Limit history size if needed (e.g., 50 states)
+      if (newHistory.length > 50) newHistory.shift()
+      return newHistory
+    })
+    
+    setHistoryIndex(prev => {
+      const newIndex = prev + 1
+      // If we shifted history, index stays at max-1
+      return newIndex >= 50 ? 49 : newIndex
+    })
+  }, [historyIndex])
+
+  const loadState = useCallback((state) => {
+    if (!fabricCanvasRef.current || !state) return
+    
+    setIsHistoryAction(true) // Prevent triggering history save during load
+    
+    fabricCanvasRef.current.loadFromJSON(state, () => {
+      fabricCanvasRef.current.renderAll()
+      
+      // Update internal state references like userPhoto position
+      const img = fabricCanvasRef.current.getObjects().find(obj => obj.userPhoto)
+      if (img) {
+        fabricImageRef.current = img
+        // Sync the React state with the restored canvas object
+        setPhotoPosition({
+            x: img.left,
+            y: img.top,
+            scale: img.scaleX, // Assuming uniform for simplicity or primary scale
+            scaleX: img.scaleX,
+            scaleY: img.scaleY,
+            rotation: img.angle
+        })
+      } else {
+        fabricImageRef.current = null
+        setUserPhoto(null)
+      }
+      
+      // We need to re-attach controls to userPhoto if it exists, as loadFromJSON might lose custom controls
+      // But standard controls should persist if not custom classes.
+      // If we have custom controls logic in canvas-area, it might need to re-run or we do it here.
+      // For now, let's assume basic properties restore is enough, 
+      // but ideally canvas-area should handle "object:added" to re-apply logic?
+      // Or we just re-apply the custom controls here if needed.
+       if (img) {
+          // Re-apply custom controls logic similar to canvas-area
+          // Note context doesn't import fabric, so we rely on what's available
+          // or we trust standard behavior. 
+       }
+       
+      setIsHistoryAction(false)
+    })
+  }, [])
+
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1
+      setHistoryIndex(newIndex)
+      loadState(history[newIndex])
+    }
+  }, [history, historyIndex, loadState])
+
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1
+      setHistoryIndex(newIndex)
+      loadState(history[newIndex])
+    }
+  }, [history, historyIndex, loadState])
+
   const value = {
     template,
     setTemplate,
@@ -80,7 +168,13 @@ export function EditorProvider({ children }) {
     fabricCanvasRef,
     fabricImageRef,
     setFabricCanvas,
-    setFabricImage
+    setFabricImage,
+    undo,
+    redo,
+    canUndo: historyIndex > 0,
+    canRedo: historyIndex < history.length - 1,
+    addToHistory,
+    isHistoryAction
   }
 
   return (
@@ -89,3 +183,4 @@ export function EditorProvider({ children }) {
     </EditorContext.Provider>
   )
 }
+

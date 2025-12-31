@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useEditor } from "@/contexts/editor-context"
 import { motion } from "framer-motion"
 import { fabric } from "fabric"
@@ -12,12 +12,15 @@ export default function CanvasArea() {
     photoPosition,
     setFabricCanvas,
     setFabricImage,
-    updatePhotoPosition
+    updatePhotoPosition,
+    addToHistory,
+    isHistoryAction
   } = useEditor()
 
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
   const fabricCanvasRef = useRef(null)
+  const [canvasInstance, setCanvasInstance] = useState(null)
 
   // 1. Initialize Canvas
   useEffect(() => {
@@ -40,6 +43,7 @@ export default function CanvasArea() {
 
     fabricCanvasRef.current = canvas
     setFabricCanvas(canvas) // IMPORTANT: This exposes the canvas to Context
+    setCanvasInstance(canvas)
 
     const handleResize = () => {
         if (!containerRef.current || !fabricCanvasRef.current) return
@@ -60,8 +64,32 @@ export default function CanvasArea() {
       canvas.dispose()
       fabricCanvasRef.current = null
       setFabricCanvas(null)
+      setCanvasInstance(null)
     }
+
   }, [setFabricCanvas])
+
+  // 1.5 Setup History Listeners
+  useEffect(() => {
+    if (!canvasInstance) return
+    const canvas = canvasInstance
+
+    const saveHistory = () => {
+      if (!isHistoryAction) {
+        addToHistory(canvas)
+      }
+    }
+    
+    canvas.on('object:modified', saveHistory)
+    canvas.on('object:added', saveHistory)
+    canvas.on('object:removed', saveHistory)
+    
+    return () => {
+        canvas.off('object:modified', saveHistory)
+        canvas.off('object:added', saveHistory)
+        canvas.off('object:removed', saveHistory)
+    }
+  }, [canvasInstance, isHistoryAction, addToHistory])
 
   // 2. Load Template Background
   useEffect(() => {
@@ -127,6 +155,82 @@ export default function CanvasArea() {
     }
   }, [photoPosition])
 
+  // 3.5 Setup Object Listeners (Handles restore from history too)
+  useEffect(() => {
+    if (!canvasInstance) return
+    const canvas = canvasInstance
+
+    const handleObjectAdded = (e) => {
+      const img = e.target
+      if (!img || !img.userPhoto || img.hasControlsSetup) return
+
+      // Enable non-uniform scaling by customizing corner controls
+      img.setControlsVisibility({
+        mt: true, mb: true, ml: true, mr: true,
+        tl: true, tr: true, bl: true, br: true
+      })
+      
+      // Override corner controls
+      const customControls = {
+        tl: new fabric.Control({ x: -0.5, y: -0.5, cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingEqually, actionName: 'scale' }),
+        tr: new fabric.Control({ x: 0.5, y: -0.5, cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingEqually, actionName: 'scale' }),
+        bl: new fabric.Control({ x: -0.5, y: 0.5, cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingEqually, actionName: 'scale' }),
+        br: new fabric.Control({ x: 0.5, y: 0.5, cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingEqually, actionName: 'scale' }),
+        ml: new fabric.Control({ x: -0.5, y: 0, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingXOrSkewingY, actionName: 'scaleX' }),
+        mr: new fabric.Control({ x: 0.5, y: 0, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingXOrSkewingY, actionName: 'scaleX' }),
+        mt: new fabric.Control({ x: 0, y: -0.5, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingYOrSkewingX, actionName: 'scaleY' }),
+        mb: new fabric.Control({ x: 0, y: 0.5, cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler, actionHandler: fabric.controlsUtils.scalingYOrSkewingX, actionName: 'scaleY' })
+      }
+      img.controls = customControls
+
+      // Constrain photo within template boundaries
+      const constrainBounds = function(e) {
+        const obj = e.target
+        if (!obj) return
+        
+        const bound = obj.getBoundingRect(true)
+        const templateBg = canvas.getObjects().find(o => o.isTemplateBackground)
+        if (!templateBg) return
+        
+        const templateBound = templateBg.getBoundingRect(true)
+        const minX = templateBound.left
+        const minY = templateBound.top
+        const maxX = templateBound.left + templateBound.width
+        const maxY = templateBound.top + templateBound.height
+        
+        const tolerance = 10
+        if (bound.left < minX - tolerance) obj.left += ((minX - tolerance) - bound.left)
+        if (bound.top < minY - tolerance) obj.top += ((minY - tolerance) - bound.top)
+        if (bound.left + bound.width > maxX + tolerance) obj.left -= ((bound.left + bound.width) - (maxX + tolerance))
+        if (bound.top + bound.height > maxY + tolerance) obj.top -= ((bound.top + bound.height) - (maxY + tolerance))
+        obj.setCoords()
+      }
+
+      img.on("moving", function (e) {
+        constrainBounds(e)
+        updatePhotoPosition({ x: Math.round(this.left), y: Math.round(this.top) })
+      })
+      img.on("scaling", function (e) {
+        constrainBounds(e)
+        if (Math.abs(this.scaleX - this.scaleY) < 0.001) {
+          updatePhotoPosition({ scale: this.scaleX, scaleX: this.scaleX, scaleY: this.scaleY })
+        } else {
+          updatePhotoPosition({ scaleX: this.scaleX, scaleY: this.scaleY })
+        }
+      })
+      img.on("rotating", function () {
+        updatePhotoPosition({ rotation: this.angle })
+      })
+      
+      img.hasControlsSetup = true
+      setFabricImage(img)
+      console.log("✅ Object configured via event listener")
+    }
+
+    canvas.on('object:added', handleObjectAdded)
+    return () => canvas.off('object:added', handleObjectAdded)
+  }, [canvasInstance, updatePhotoPosition, setFabricImage])
+
   // 4. Load User Photo
   useEffect(() => {
     if (!fabricCanvasRef.current || !userPhoto) return
@@ -161,145 +265,15 @@ export default function CanvasArea() {
         transparentCorners: false,
         lockScalingFlip: false
       })
-      
-      // Enable non-uniform scaling by customizing corner controls
-      img.setControlsVisibility({
-        mt: true, // middle top
-        mb: true, // middle bottom
-        ml: true, // middle left
-        mr: true, // middle right
-        tl: true, // top left
-        tr: true, // top right
-        bl: true, // bottom left
-        br: true  // bottom right
-      })
-      
-      // Override corner controls to allow non-uniform scaling
-      const customControls = {
-        tl: new fabric.Control({
-          x: -0.5, y: -0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingEqually,
-          actionName: 'scale'
-        }),
-        tr: new fabric.Control({
-          x: 0.5, y: -0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingEqually,
-          actionName: 'scale'
-        }),
-        bl: new fabric.Control({
-          x: -0.5, y: 0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingEqually,
-          actionName: 'scale'
-        }),
-        br: new fabric.Control({
-          x: 0.5, y: 0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingEqually,
-          actionName: 'scale'
-        }),
-        ml: new fabric.Control({
-          x: -0.5, y: 0,
-          cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingXOrSkewingY,
-          actionName: 'scaleX'
-        }),
-        mr: new fabric.Control({
-          x: 0.5, y: 0,
-          cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingXOrSkewingY,
-          actionName: 'scaleX'
-        }),
-        mt: new fabric.Control({
-          x: 0, y: -0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingYOrSkewingX,
-          actionName: 'scaleY'
-        }),
-        mb: new fabric.Control({
-          x: 0, y: 0.5,
-          cursorStyleHandler: fabric.controlsUtils.scaleSkewCursorStyleHandler,
-          actionHandler: fabric.controlsUtils.scalingYOrSkewingX,
-          actionName: 'scaleY'
-        })
-      }
-      
-      img.controls = customControls
-
-      // Constrain photo within template boundaries (not too strict)
-      const constrainBounds = function(e) {
-        const obj = e.target
-        if (!obj) return
-        
-        const bound = obj.getBoundingRect(true)
-        
-        // Only constrain to template background bounds (allow some overflow for fill)
-        const templateBg = canvas.getObjects().find(o => o.isTemplateBackground)
-        if (!templateBg) return
-        
-        const templateBound = templateBg.getBoundingRect(true)
-        const minX = templateBound.left
-        const minY = templateBound.top
-        const maxX = templateBound.left + templateBound.width
-        const maxY = templateBound.top + templateBound.height
-        
-        // Keep photo mostly within template (allow reasonable overflow)
-        const tolerance = 10 // pixels
-        
-        if (bound.left < minX - tolerance) {
-          obj.left = obj.left + ((minX - tolerance) - bound.left)
-        }
-        if (bound.top < minY - tolerance) {
-          obj.top = obj.top + ((minY - tolerance) - bound.top)
-        }
-        if (bound.left + bound.width > maxX + tolerance) {
-          obj.left = obj.left - ((bound.left + bound.width) - (maxX + tolerance))
-        }
-        if (bound.top + bound.height > maxY + tolerance) {
-          obj.top = obj.top - ((bound.top + bound.height) - (maxY + tolerance))
-        }
-        
-        obj.setCoords()
-      }
-
-      // Update Context when user drags manually
-      img.on("moving", function (e) {
-        constrainBounds(e)
-        updatePhotoPosition({ x: Math.round(this.left), y: Math.round(this.top) })
-      })
-      img.on("scaling", function (e) {
-        constrainBounds(e)
-        // Only update scale if uniform scaling (both scaleX and scaleY are equal)
-        if (Math.abs(this.scaleX - this.scaleY) < 0.001) {
-          updatePhotoPosition({ 
-            scale: this.scaleX,
-            scaleX: this.scaleX,
-            scaleY: this.scaleY
-          })
-        } else {
-          // Independent stretching - don't update uniform scale
-          updatePhotoPosition({ 
-            scaleX: this.scaleX,
-            scaleY: this.scaleY
-          })
-        }
-      })
-      img.on("rotating", function () {
-        updatePhotoPosition({ rotation: this.angle })
-      })
 
       canvas.add(img)
       canvas.setActiveObject(img)
       canvas.renderAll()
       
-      // Set the reference after everything is ready
-      setFabricImage(img)
-      
-      console.log("✅ New photo loaded and fabricImage updated")
+      console.log("✅ New photo loaded")
     })
   }, [userPhoto, setFabricImage, updatePhotoPosition])
+
 
   function allowDrop(e) { e.preventDefault() }
   const handleDrop = (e) => { /* drag drop logic */ } 
