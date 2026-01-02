@@ -151,7 +151,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border; /* Removed outline-ring/50 to avoid "white shadow" globally */
   }
   body {
     @apply bg-background text-foreground tracking-tight;
@@ -165,12 +165,22 @@
   h2 { @apply text-3xl lg:text-4xl; }
   h3 { @apply text-2xl; }
   p { @apply leading-7 text-pretty; }
+  
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  html {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
 }
 
 @layer utilities {
   /* Premium Glassmorphism */
   .glass-panel {
-    @apply bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-sm;
+    @apply bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-sm; /* Reduced border opacity */
   }
   
   .glass-header {

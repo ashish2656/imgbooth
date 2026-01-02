@@ -127,7 +127,7 @@ function NavigationMenuLink({
     <NavigationMenuPrimitive.Link
       data-slot="navigation-menu-link"
       className={cn(
-        "data-[active=true]:focus)]:text-muted-foreground flex flex-col gap-1 rounded-sm p-2 text-sm transition-all outline-none focus-visible)]:size-4",
+        "data-[active=true]:focus)]: flex flex-col gap-1 rounded-sm p-2 text-sm transition-all outline-none focus-visible)]:size-4",
         className,
       )}
       {...props}

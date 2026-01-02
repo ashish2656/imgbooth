@@ -73,7 +73,7 @@ function EmptyDescription({ className, ...props }) {
     <div
       data-slot="empty-description"
       className={cn(
-        'text-muted-foreground [&>a,
+        ' [&>a,
         className,
       )}
       {...props}

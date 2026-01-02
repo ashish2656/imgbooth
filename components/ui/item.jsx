@@ -132,7 +132,7 @@ function ItemDescription({ className, ...props }) {
     <p
       data-slot="item-description"
       className={cn(
-        'text-muted-foreground line-clamp-2 text-sm leading-normal font-normal text-balance',
+        ' line-clamp-2 text-sm leading-normal font-normal text-balance',
         '[&>a,
         className,
       )}

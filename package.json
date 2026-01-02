@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["canvas", "sharp"]
+    "onlyBuiltDependencies": [
+      "canvas",
+      "sharp"
+    ]
   },
   "scripts": {
     "dev": "next dev",
-    "build": "NEXT_PRIVATE_DISABLE_TURBOPACK=1 next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -50,6 +53,7 @@
     "embla-carousel-react": "8.5.1",
     "fabric": "^5.5.2",
     "framer-motion": "^11.18.0",
+    "idb": "^8.0.3",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "16.0.10",

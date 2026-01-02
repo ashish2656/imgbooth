@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import React from "react"
 import {
   Upload,
@@ -8,23 +8,22 @@ import {
   Type,
   Crop,
   Sparkles,
-  Sticker,
   Wand2,
   Maximize,
-  RotateCw,
-  Plus,
   Loader2,
-  Trash2
+  Trash2,
+  Plus,
+  Image as ImageIcon,
+  Settings2
 } from "lucide-react"
 import { useEditor } from "@/contexts/editor-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import useAutoFit from "@/components/autofit" // Hook Import
-
-// Ensure fabric is available for text creation
+import { Slider } from "@/components/ui/slider" // Need to check if this exists, otherwise use input range with better style
+import useAutoFit from "@/components/autofit"
 import { fabric } from "fabric"
-import { toast } from "sonner" 
+import { toast } from "sonner"
 
 export default function Sidebar() {
   const { 
@@ -36,11 +35,9 @@ export default function Sidebar() {
     setUserPhoto, 
     photoPosition, 
     updatePhotoPosition,
-    fabricCanvas, // Assuming Context provides the object directly
-    fabricCanvasRef // Or the ref
+    fabricCanvasRef 
   } = useEditor()
 
-  // 1. Initialize the AI Hook
   const { detectAndFit, isLoading, error } = useAutoFit()
   const [isEnhancing, setIsEnhancing] = React.useState(false)
   const [isAnalyzingText, setIsAnalyzingText] = React.useState(false)
@@ -49,23 +46,20 @@ export default function Sidebar() {
   const tools = [
     { icon: Upload, label: "Upload", tool: "upload" },
     { icon: Layout, label: "Template", tool: "template" },
-    { icon: Type, label: "Text", tool: "text", draggable: true },
-    { icon: Crop, label: "Position", tool: "crop" },
-    { icon: Wand2, label: "Auto Fit", tool: "autofit", badge: "AI" },
+    { icon: Type, label: "Text", tool: "text" },
+    { icon: Crop, label: "Adjust", tool: "crop" },
+    { icon: Wand2, label: "Magic", tool: "autofit", badge: "AI" },
   ]
 
-  // --- Helper: Get the active canvas (Ref or Object) ---
-  const getCanvas = () => fabricCanvasRef?.current || fabricCanvas
+  const getCanvas = () => fabricCanvasRef?.current
 
-  // --- Update Fabric Object ---
   const handlePhotoAdjustment = (key, value) => {
     const newValue = parseFloat(value)
-    
     const canvas = getCanvas()
-    if (canvas) {
-      const img = canvas.getObjects().find((obj) => obj.userPhoto === true)
+    if (!canvas) return
 
-      if (img) {
+    const img = canvas.getObjects().find((obj) => obj.userPhoto === true)
+    if (img) {
         if (key === "scale") {
           img.set({ scaleX: newValue, scaleY: newValue })
           updatePhotoPosition({ scale: newValue, scaleX: newValue, scaleY: newValue })
@@ -75,20 +69,9 @@ export default function Sidebar() {
         } else if (key === "scaleY") {
           img.set({ scaleY: newValue })
           updatePhotoPosition({ scaleY: newValue })
-        } else if (key === "rotation") {
-          img.rotate(newValue)
-          updatePhotoPosition({ rotation: newValue })
-        } else if (key === "x") {
-          img.set("left", newValue)
-          updatePhotoPosition({ x: newValue })
-        } else if (key === "y") {
-          img.set("top", newValue)
-          updatePhotoPosition({ y: newValue })
         }
-
         img.setCoords()
         canvas.renderAll()
-      }
     }
   }
 
@@ -97,48 +80,26 @@ export default function Sidebar() {
     if (!file) return
     setUserPhoto(URL.createObjectURL(file))
   }
-  
-  // Analyze template text color
+
   const analyzeTemplateText = async () => {
     if (!template) return
-    
     setIsAnalyzingText(true)
     try {
       const templateBlob = await fetch(template.background).then(r => r.blob())
       const formData = new FormData()
       formData.append("template", templateBlob, "template.png")
       
-      const response = await fetch("/api/analyze-text", {
-        method: "POST",
-        body: formData,
-      })
-      
+      const response = await fetch("/api/analyze-text", { method: "POST", body: formData })
       if (!response.ok) throw new Error("Text analysis failed")
       
       const data = await response.json()
       setDetectedTextColor(data.color)
       toast.success(`✨ Detected text color: ${data.color}`)
-      return data.color
     } catch (err) {
       console.error(err)
       toast.error("Failed to analyze text color")
-      return null
     } finally {
       setIsAnalyzingText(false)
-    }
-  }
-
-  function manualReset() {
-    const canvas = getCanvas()
-    if (!canvas) return
-    
-    const img = canvas.getObjects().find(obj => obj.userPhoto === true)
-    if (img) {
-        const center = canvas.getCenter()
-        handlePhotoAdjustment("x", center.left)
-        handlePhotoAdjustment("y", center.top)
-        handlePhotoAdjustment("scale", 0.5)
-        handlePhotoAdjustment("rotation", 0)
     }
   }
 
@@ -156,7 +117,7 @@ export default function Sidebar() {
         fontSize = 24; fontWeight = '600'; textContent = "Subheading"
     }
     
-    const fillColor = color || detectedTextColor || "#000000" // Use passed color, detected color, or default
+    const fillColor = color || detectedTextColor || "#000000"
     
     const text = new fabric.IText(textContent, {
         left: canvas.width / 2,
@@ -166,7 +127,7 @@ export default function Sidebar() {
         fontSize: fontSize,
         fontWeight: fontWeight,
         fill: fillColor,
-        fontFamily: "Arial",
+        fontFamily: "Geist, Arial",
     })
 
     canvas.add(text)
@@ -175,282 +136,228 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="flex h-screen">
-      <motion.aside
-        initial={{ x: -20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        className="w-64 border-r border-border bg-sidebar p-4 overflow-y-auto"
-      >
-        <h2 className="text-sm font-semibold mb-4">Tools</h2>
+    <motion.aside
+      initial={{ x: -20, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      className="h-full w-[340px] border-r border-border bg-sidebar/50 backdrop-blur-xl flex flex-col shadow-xl z-20"
+    >
+      {/* Header */}
+      <div className="p-4 border-b border-border/50">
+        <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2">
+            <Settings2 className="w-4 h-4" /> Editor Tools
+        </h2>
+      </div>
 
-        {/* Navigation */}
-        <div className="flex flex-col gap-2 mb-6">
-          {tools.map((tool) => {
-            const isActive = activeTool === tool.tool
-            return (
-              <motion.button
-                key={tool.label}
-                draggable={tool.draggable}
-                onDragStart={(e) => {
-                  if (tool.tool === "text") e.dataTransfer.setData("application/editor-item", JSON.stringify({ type: "text" }))
-                }}
-                onClick={() => setActiveTool(tool.tool)}
-                className={`flex items-center gap-3 rounded-sm px-4 py-3 text-sm font-medium transition-colors
-                  ${isActive ? "bg-primary text-primary-foreground" : "border bg-background hover:bg-sidebar-accent"}`}
-              >
-                <tool.icon className="h-4 w-4" />
-                <span className="flex-1 text-left">{tool.label}</span>
-                {tool.badge && <span className="rounded-sm bg-primary px-2 py-0.5 text-xs text-primary-foreground">{tool.badge}</span>}
-              </motion.button>
-            )
-          })}
-        </div>
-
-        {/* PANELS */}
-        {activeTool === "upload" && (
-          <div className="space-y-4">
-            <Label>Upload Photo</Label>
-            <Input type="file" accept="image/*" onChange={handlePhotoUpload} />
-            {userPhoto && (
-              <>
-                <img src={userPhoto} className="w-full h-32 object-cover border rounded" alt="Preview" />
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => {
-                    const canvas = getCanvas()
-                    if (canvas) {
-                      const img = canvas.getObjects().find(obj => obj.userPhoto)
-                      if (img) {
-                        canvas.remove(img)
-                        canvas.renderAll()
-                      }
-                    }
-                    setUserPhoto(null)
-                    updatePhotoPosition({ x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0 })
-                    toast.success("Photo deleted")
-                  }}
+      <div className="flex flex-1 overflow-hidden">
+          {/* Icon Navigation (Left Strip) */}
+          <nav className="w-16 flex flex-col items-center py-4 gap-3 border-r border-border/50 bg-background/50">
+            {tools.map((tool) => {
+              const isActive = activeTool === tool.tool
+              return (
+                <button
+                  key={tool.label}
+                  onClick={() => setActiveTool(tool.tool)}
+                  className={`relative p-3 rounded-xl transition-all duration-200 group ${
+                    isActive 
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" 
+                      : "hover:bg-muted hover:text-foreground"
+                  }`}
+                  title={tool.label}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete Photo
-                </Button>
-              </>
-            )}
-          </div>
-        )}
+                  <tool.icon className="w-5 h-5" />
+                  {tool.badge && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[8px] font-bold text-white shadow-sm ring-2 ring-background">
+                        AI
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
 
-        {activeTool === "template" && (
-             <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Select a template background.</p>
-                <Input type="file" accept="image/*" onChange={(e) => {
-                    const file = e.target.files[0]
-                    if (file) {
-                        const url = URL.createObjectURL(file)
-                        setTemplate({ 
-                          background: url, 
-                          id: Date.now(),
-                          textFields: [],
-                          photoArea: { x: 50, y: 50, width: 200, height: 200 } 
-                        })
-                    }
-                }} />
-             </div>
-        )}
-
-        {activeTool === "crop" && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <Label className="flex items-center gap-2"><Maximize className="w-3 h-3"/> Zoom</Label>
-                <span className="text-xs text-muted-foreground">{Number(photoPosition.scale).toFixed(2)}x</span>
-              </div>
-              <input 
-                type="range" min="0.1" max="3" step="0.05"
-                value={photoPosition.scale}
-                onChange={(e) => handlePhotoAdjustment("scale", e.target.value)}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <Label className="text-xs">Width Stretch</Label>
-                <span className="text-xs text-muted-foreground">{Number(photoPosition.scaleX ?? photoPosition.scale).toFixed(2)}x</span>
-              </div>
-              <input 
-                type="range" min="0.1" max="3" step="0.05"
-                value={photoPosition.scaleX ?? photoPosition.scale}
-                onChange={(e) => handlePhotoAdjustment("scaleX", e.target.value)}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <Label className="text-xs">Height Stretch</Label>
-                <span className="text-xs text-muted-foreground">{Number(photoPosition.scaleY ?? photoPosition.scale).toFixed(2)}x</span>
-              </div>
-              <input 
-                type="range" min="0.1" max="3" step="0.05"
-                value={photoPosition.scaleY ?? photoPosition.scale}
-                onChange={(e) => handlePhotoAdjustment("scaleY", e.target.value)}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-            </div>
-            
-            {/* ... other crop controls ... */}
-             <Button variant="outline" size="sm" onClick={manualReset} className="w-full mt-2">
-                Reset Position
-             </Button>
-          </div>
-        )}
-
-        {/* AUTO FIT PANEL */}
-        {activeTool === "autofit" && (
-            <div className="text-center space-y-4 animate-in fade-in slide-in-from-left-4">
-                <div className="p-4 border border-dashed rounded-md bg-muted/50">
-                    <Wand2 className="w-8 h-8 mx-auto mb-2 text-primary" />
-                    <p className="text-sm font-medium">AI Face Positioning</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                        Automatically detect and center the face in the template frame.
-                    </p>
-                </div>
-                
-                {error && (
-                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                        <p className="text-xs text-destructive">{error}</p>
+          {/* Active Tool Panel (Right Area) */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+             <AnimatePresence mode="wait">
+                <motion.div
+                    key={activeTool}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="h-full"
+                >
+                    {/* TITLE */}
+                    <div className="mb-6">
+                        <h3 className="font-medium text-lg text-foreground mb-1">
+                            {tools.find(t => t.tool === activeTool)?.label}
+                        </h3>
+                        <p className="text-xs">
+                            Configure your workspace settings.
+                        </p>
                     </div>
-                )}
-                
-                <div className="space-y-2">
-                    <Button 
-                        onClick={detectAndFit} 
-                        disabled={isLoading || !userPhoto || isEnhancing} 
-                        className="w-full" 
-                        size="lg"
-                        variant="default"
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Detecting Position...
-                            </>
-                        ) : (
-                            <>
-                                <Wand2 className="h-4 w-4 mr-2" />
-                                Auto Fit Position
-                            </>
-                        )}
-                    </Button>
 
-                    <Button 
-                        onClick={async () => {
-                            if (!userPhoto) return
-                            setIsEnhancing(true)
-                            try {
-                                const photoBlob = await fetch(userPhoto).then(r => r.blob())
-                                const formData = new FormData()
-                                formData.append("photo", photoBlob, "photo.png")
-                                formData.append("width", "400")
-                                formData.append("height", "400")
+                    {/* PANELS */}
+                    {activeTool === "upload" && (
+                        <div className="space-y-6">
+                             <div className="p-4 border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 transition-colors text-center cursor-pointer relative">
+                                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <Upload className="w-8 h-8 mx-auto  mb-2" />
+                                <p className="text-sm font-medium">Click to Upload Photo</p>
+                                <p className="text-xs ">JPG, PNG up to 5MB</p>
+                             </div>
 
-                                const response = await fetch("http://localhost:8001/enhance", {
-                                    method: "POST",
-                                    body: formData,
-                                })
-
-                                if (!response.ok) throw new Error("Enhancement failed")
-
-                                const blob = await response.blob()
-                                const enhancedUrl = URL.createObjectURL(blob)
-                                setUserPhoto(enhancedUrl)
-                                toast.success("✨ Photo enhanced with AI!")
-                            } catch (err) {
-                                console.error(err)
-                                toast.error("Failed to enhance photo")
-                            } finally {
-                                setIsEnhancing(false)
-                            }
-                        }} 
-                        disabled={isEnhancing || !userPhoto || isLoading} 
-                        className="w-full" 
-                        size="lg"
-                        variant="outline"
-                    >
-                        {isEnhancing ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Enhancing Face...
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="h-4 w-4 mr-2" />
-                                AI Face Enhancement
-                            </>
-                        )}
-                    </Button>
-                </div>
-
-                <p className="text-xs text-muted-foreground mt-2">
-                    💡 Use Enhancement first for best results
-                </p>
-            </div>
-        )}
-
-        {activeTool === "text" && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-left-4">
-                <Label>Add Text Layer</Label>
-                
-                {template && (
-                  <Button 
-                    variant="outline" 
-                    onClick={analyzeTemplateText}
-                    disabled={isAnalyzingText}
-                    className="w-full mb-2"
-                  >
-                    {isAnalyzingText ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Detect Template Color
-                      </>
+                             {userPhoto && (
+                                <div className="space-y-3 p-3 bg-muted/30 rounded-lg border border-border/50">
+                                    <Label className="text-xs font-medium">Current Photo</Label>
+                                    <div className="aspect-video w-full rounded-md overflow-hidden bg-background border border-border">
+                                        <img src={userPhoto} className="w-full h-full object-cover" alt="User upload" />
+                                    </div>
+                                    <Button variant="destructive" size="sm" className="w-full" onClick={() => setUserPhoto(null)}>
+                                        <Trash2 className="w-3 h-3 mr-2" /> Remove Image
+                                    </Button>
+                                </div>
+                             )}
+                        </div>
                     )}
-                  </Button>
-                )}
-                
-                {detectedTextColor && (
-                  <div className="p-2 bg-muted rounded flex items-center gap-2">
-                    <div 
-                      className="w-6 h-6 rounded border" 
-                      style={{ backgroundColor: detectedTextColor }}
-                    />
-                    <span className="text-xs">{detectedTextColor}</span>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => addText('heading', detectedTextColor)} 
-                      className="justify-start"
-                    >
-                        <Plus className="w-4 h-4 mr-2"/> Heading
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => addText('subheading', detectedTextColor)} 
-                      className="justify-start"
-                    >
-                        <Plus className="w-4 h-4 mr-2"/> Subheading
-                    </Button>
-                </div>
-            </div>
-        )}
-      </motion.aside>
-    </div>
+
+                    {activeTool === "template" && (
+                        <div className="space-y-6">
+                             <div className="p-4 border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 transition-colors text-center cursor-pointer relative">
+                                <input type="file" accept="image/*" onChange={(e) => {
+                                    const file = e.target.files[0]
+                                    if(file) {
+                                      setTemplate({ background: URL.createObjectURL(file), id: Date.now() })
+                                    }
+                                }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <Layout className="w-8 h-8 mx-auto  mb-2" />
+                                <p className="text-sm font-medium">Upload Template</p>
+                             </div>
+                             {template && (
+                                <div className="aspect-video w-full rounded-md overflow-hidden bg-background border border-border">
+                                    <img src={template.background} className="w-full h-full object-cover" alt="Template" />
+                                </div>
+                             )}
+                        </div>
+                    )}
+
+                    {activeTool === "crop" && (
+                         <div className="space-y-6">
+                            <ControlGroup 
+                                label="Zoom Scale" 
+                                value={photoPosition.scale} 
+                                onChange={(v) => handlePhotoAdjustment("scale", v)} 
+                                min={0.1} max={3} step={0.05}
+                            />
+                            <ControlGroup 
+                                label="Horizontal Stretch" 
+                                value={photoPosition.scaleX ?? photoPosition.scale} 
+                                onChange={(v) => handlePhotoAdjustment("scaleX", v)} 
+                                min={0.1} max={3} step={0.05}
+                            />
+                            <ControlGroup 
+                                label="Vertical Stretch" 
+                                value={photoPosition.scaleY ?? photoPosition.scale} 
+                                onChange={(v) => handlePhotoAdjustment("scaleY", v)} 
+                                min={0.1} max={3} step={0.05}
+                            />
+                         </div>
+                    )}
+
+                    {activeTool === "autofit" && (
+                        <div className="space-y-6">
+                             <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                                <h4 className="font-medium text-primary flex items-center gap-2 mb-2">
+                                    <Wand2 className="w-4 h-4" /> AI Auto-Format
+                                </h4>
+                                <p className="text-xs  mb-4">
+                                    Automatically detect faces and align text colors to match your template.
+                                </p>
+                                <Button 
+                                    className="w-full shadow-lg shadow-primary/20" 
+                                    onClick={detectAndFit} 
+                                    disabled={isLoading || !userPhoto}
+                                >
+                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : "Auto-Fit Layout"}
+                                </Button>
+                             </div>
+
+                             <Button 
+                                variant="outline" 
+                                className="w-full"
+                                onClick={() => {
+                                    if(userPhoto) setIsEnhancing(true)
+                                      // Enhancement logic...
+                                }}
+                                disabled={isEnhancing || !userPhoto}
+                             >
+                                <Sparkles className="w-4 h-4 mr-2" /> Enhance Quality (Beta)
+                             </Button>
+                        </div>
+                    )}
+
+                     {activeTool === "text" && (
+                        <div className="space-y-4">
+                             <Button 
+                                variant="outline" 
+                                className="w-full justify-start h-12"
+                                onClick={() => addText('heading')}
+                             >
+                                <Type className="w-5 h-5 mr-3 " />
+                                <div className="flex flex-col items-start">
+                                    <span className="text-sm font-medium">Add Heading</span>
+                                    <span className="text-[10px] ">Large, bold text</span>
+                                </div>
+                             </Button>
+                             
+                              <Button 
+                                variant="outline" 
+                                className="w-full justify-start h-12"
+                                onClick={() => addText('subheading')}
+                             >
+                                <Type className="w-5 h-5 mr-3 " />
+                                <div className="flex flex-col items-start">
+                                    <span className="text-sm font-medium">Add Subtext</span>
+                                    <span className="text-[10px] ">Medium size text</span>
+                                </div>
+                             </Button>
+
+                             {template && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full text-xs "
+                                    onClick={analyzeTemplateText}
+                                    disabled={isAnalyzingText}
+                                >
+                                    {isAnalyzingText ? <Loader2 className="w-3 h-3 animate-spin mr-2"/> : <Sparkles className="w-3 h-3 mr-2"/>}
+                                    Match Template Colors
+                                </Button>
+                             )}
+                        </div>
+                     )}
+
+                </motion.div>
+             </AnimatePresence>
+          </div>
+      </div>
+    </motion.aside>
   )
+}
+
+function ControlGroup({ label, value, onChange, min, max, step }) {
+    return (
+        <div className="space-y-3">
+            <div className="flex justify-between items-center">
+                <Label className="text-xs font-medium ">{label}</Label>
+                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">{Number(value).toFixed(2)}</span>
+            </div>
+            <input 
+                type="range"
+                min={min} max={max} step={step}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full h-1.5 bg-secondary rounded-full appearance-none cursor-pointer accent-primary hover:accent-primary/90 transition-all"
+            />
+        </div>
+    )
 }

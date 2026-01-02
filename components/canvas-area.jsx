@@ -279,13 +279,13 @@ export default function CanvasArea() {
   const handleDrop = (e) => { /* drag drop logic */ } 
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-muted p-4 h-full w-full">
+    <div className="flex flex-1 items-center justify-center bg-transparent p-8 h-full w-full">
       <motion.div
         ref={containerRef}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4 }}
-        className="relative w-full h-full bg-background shadow-lg overflow-hidden border border-border rounded-md"
+        className="relative w-full h-full bg-background shadow-lg overflow-hidden border border-border rounded-md touch-none"
         onDragOver={allowDrop}
         onDrop={handleDrop}
       >

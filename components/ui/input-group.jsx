@@ -36,7 +36,7 @@ function InputGroup({ className, ...props }) {
 }
 
 const inputGroupAddonVariants = cva(
-  "text-muted-foreground flex h-auto cursor-text items-center justify-center gap-2 py-1.5 text-sm font-medium select-none [&>svg)]:size-4 [&>kbd]:rounded-[calc(var(--radius)-5px)] group-data-[disabled=true]/input-group,
+  " flex h-auto cursor-text items-center justify-center gap-2 py-1.5 text-sm font-medium select-none [&>svg)]:size-4 [&>kbd]:rounded-[calc(var(--radius)-5px)] group-data-[disabled=true]/input-group,
   {
     variants
       align
@@ -118,7 +118,7 @@ function InputGroupText({ className, ...props }) {
   return (
     <span
       className={cn(
-        "text-muted-foreground flex items-center gap-2 text-sm [&_svg]:pointer-events-none [&_svg)]:size-4",
+        " flex items-center gap-2 text-sm [&_svg]:pointer-events-none [&_svg)]:size-4",
         className,
       )}
       {...props}

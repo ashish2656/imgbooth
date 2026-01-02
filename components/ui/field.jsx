@@ -143,7 +143,7 @@ function FieldDescription({ className, ...props }) {
     <p
       data-slot="field-description"
       className={cn(
-        'text-muted-foreground text-sm leading-normal font-normal group-has-[[data-orientation=horizontal]]/field,
+        ' text-sm leading-normal font-normal group-has-[[data-orientation=horizontal]]/field,
         'last,
         '[&>a,
         className,
@@ -173,7 +173,7 @@ function FieldSeparator({
       <Separator className="absolute inset-0 top-1/2" />
       {children && (
         <span
-          className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
+          className="bg-background  relative mx-auto block w-fit px-2"
           data-slot="field-separator-content"
         >
           {children}

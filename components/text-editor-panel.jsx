@@ -129,7 +129,7 @@ export default function TextEditorPanel() {
               <div className="space-y-2">
                 <Label>Text Content</Label>
                 <textarea
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder: focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
                   rows={3}
                   value={activeObject.text}
                   onChange={(e) => updateStyle('text', e.target.value)}
@@ -248,7 +248,7 @@ export default function TextEditorPanel() {
                   </div>
                 </>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 ">
                     <Type className="w-12 h-12 mx-auto mb-3 opacity-20" />
                     <p className="text-sm">Select a text object on the canvas to edit its properties.</p>
                 </div>
@@ -264,7 +264,7 @@ export default function TextEditorPanel() {
           <Download className="h-4 w-4 mr-2" />
           Download
         </Button>
-        <Button variant="ghost" onClick={resetEditor} className="w-full text-muted-foreground hover:text-destructive">
+        <Button variant="ghost" onClick={resetEditor} className="w-full  hover:text-destructive">
           <RotateCcw className="h-4 w-4 mr-2" />
           Reset Canvas
         </Button>

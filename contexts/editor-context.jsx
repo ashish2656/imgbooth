@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useRef } from "react"
+import { toast } from "sonner"
 
 const EditorContext = createContext()
 
@@ -151,6 +152,64 @@ export function EditorProvider({ children }) {
     }
   }, [history, historyIndex, loadState])
 
+  // --- Persistence Logic ---
+  const saveProject = useCallback(async (name = "Untitled Project") => {
+    if (!fabricCanvasRef.current) return null
+    
+    try {
+        const canvas = fabricCanvasRef.current
+        // 1. Get Canvas JSON
+        const json = canvas.toJSON(['id', 'locked', 'movementLimits', 'isTemplateBackground', 'userPhoto', 'originalWidth', 'originalHeight', 'templateScale'])
+        
+        // 2. Generate Preview Image
+        // Use a multiplier for better quality, but keep it performant
+        const dataURL = canvas.toDataURL({
+            format: 'png',
+            quality: 0.8,
+            multiplier: 0.5 // Smaller preview
+        })
+        
+        // 3. Save to DB
+        // We dynamically import to avoid SSR issues with idb if any
+        const { saveProjectToDB } = await import('@/lib/db')
+        const id = await saveProjectToDB({
+            name,
+            preview: dataURL,
+            canvasState: json,
+            template, // Save template metadata if needed for quick reload
+            lastModified: Date.now()
+        })
+        
+        toast.success("Project saved successfully!")
+        return id
+    } catch (err) {
+        console.error("Failed to save project:", err)
+        toast.error("Failed to save project")
+        return null
+    }
+  }, [template])
+  
+  const loadProject = useCallback(async (id) => {
+      try {
+          const { getProjectById } = await import('@/lib/db')
+          const project = await getProjectById(id)
+          if (!project) throw new Error("Project not found")
+          
+          // Restore Template meta first if needed
+          if (project.template) setTemplate(project.template)
+          
+          // Load Canvas
+          loadState(project.canvasState)
+          
+          toast.success(`Loaded "${project.name}"`)
+          return true
+      } catch (err) {
+          console.error("Failed to load project:", err)
+          toast.error("Failed to load project")
+          return false
+      }
+  }, [loadState])
+
   const value = {
     template,
     setTemplate,
@@ -174,7 +233,9 @@ export function EditorProvider({ children }) {
     canUndo: historyIndex > 0,
     canRedo: historyIndex < history.length - 1,
     addToHistory,
-    isHistoryAction
+    isHistoryAction,
+    saveProject,
+    loadProject
   }
 
   return (
